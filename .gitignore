@@ -1,0 +1,5 @@
+# Each cookbook has its own repo
+cookbooks
+
+# Same for demo apps
+rails_projects
