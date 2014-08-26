@@ -33,6 +33,23 @@ The Vagrantfile is set up so that it can have multiple machines defined.  All th
 * rdev  # ruby on rails development environment
 * rtest # ruby on rails test environment
 
+I have the chef-client provisioner configured, with the same toggle control for using chef-zero or a permanent server that I use in my knife configuration.  I use the chef_client provisioner -- rather than either chef_solo or chef_zero for a couple of reasons:
+* If using chef_solo, I would want to use berkshelf, but the berkshelf-vagrant plugin doesn't currently support a multi-machine vagrant file.
+* When using chef_zero, vagrant controls the setup and teardown of the server, and I presume does so with a single VM in mind.  I want to use my server across the multiple machines, so I want to control its life cycle.
+
+TODO: Script load/unload using knife backup 
+
+### SSH
+
+Rather than relying on ```vagrant ssh``` I created entries for these VMs in my ~/.ssh/config file.  In addition to giving me quicker & more flexible access to VMs, it dovetails with my ServerSpec setup for testing.  An example from my .ssh/config is below:
+```
+Host rtest
+	HostName 192.168.43.5
+	User vagrant
+	IdentityFile /Users/normseth/.vagrant.d/insecure_private_key
+````
+
+
 ## Chef Layout & Configuration
 ```
 demo-v2/
@@ -69,6 +86,16 @@ metadata
 
 One optional practice I'm not following is a Berksfile above the cookbook directories that is, in essence, a superset of the per-cookbook files.  If you create such a file, you need to make sure it doesn't have a ```metadata``` entry.
 
+## Testing
+My test "harness" for infrastructure code includes the following:
+* Rspec
+* ChefSpec
+* ServerSpec
+One common tool _not_ on this list currently is Test-Kitchen.  I may well add it in future, but at the moment I'm not worrying about multi-platform issues, which is perhaps the biggest reason to use Test-Kitchen.  I.e. it would add complexity for limited value right now.
+
+For application code, I've simply followed the tools employed in the tutorial:
+* Rspec
+* Capybara
 
 ## Jenkins
 
@@ -78,6 +105,8 @@ The initial setup of Jenkins is intended to be simple but reasonable:
 * Master and single slave
 
 I have a cookbook that does this (more or less) already, although I will need to modify it to set up a slave server: https://github.com/level11-cookbooks/build-master.
+
+The slave is where build and test jobs will be run.  In the context of a rails application, this means it will be provisioned with requirements for both Jenkins and rails.  
 
 TODO: Understand and document the orchestration necessary to ensure master and slave are both up and connected.
 If you aren't familiar with Jenkins' master/slave topology, you can read about it here: https://wiki.jenkins-ci.org/display/JENKINS/Distributed+builds.

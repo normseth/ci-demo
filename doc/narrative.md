@@ -186,13 +186,12 @@ After the infrastructure code is working, I'll create a deploy recipe to take ca
 
 In each case, there are solid community cookbooks I can leverage.
 I'll wrap these using a single cookbook I create, rails_infrastructure:
-'knife cookbook create rails_infrastructure'
 My roles will reference recipes in rails_infrastructure in their run lists.
 Rails environment will derive from chef node environment.
 
 ...
 
-After a few iterations, I have my cookbook provisioning everything except the application deployment.  I'll have some refactoring to do, but for now it's good enough.  And once the node is converged, I have only a small set of commands to deploy the application:
+After a few iterations, I have my cookbook provisioning everything except the application deployment.  It's [here] with the tag xxxx.  I'll have some refactoring to do, but for now it's good enough.  And once the node is converged, I have only a small set of commands to deploy the application:
 
 ```
 git clone https://github.com/normseth/microblog_ruby.git
@@ -202,4 +201,32 @@ bundle exec rake db:migrate
 bundle exec unicorn_rails
 ```
 
-### Continuously Integrating Application Code
+That clone is going against a public repo.  More than likely, I need to work against a private one.
+So...
+
+Status:
+node setup works ok.
+app_deploy cookbook works ok.
+caveat: doesn't work if ruby not installed previously (e.g. previous chef-client run)
+todo: start application afterwards
+possible caveat: when starting manually, need to pass environment RAILS_ENV=test bundle exec....
+
+## Continuously Integrating Infrastructure Code
+
+In the context of my infrastructure code -- i.e. automated provisioning via Chef -- I want to test at a few different levels, each time code is checked in:
+* lint / static analysis
+* unit tests
+* integration tests
+
+### Integration Tests
+
+Install serverspec gem ```gem install serverspec```
+Create spec directory
+Create Rakefile, roles.yml and spec/spec_helper.rb per the Advanced instructions on ServerSpec.org
+
+
+## Continuously Integrating Application Code
+
+My demo application only comes with integration tests.
+<implement/describe>
+Unit tests are a good practice.
