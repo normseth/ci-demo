@@ -44,23 +44,6 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     scratch.vm.box = "opscode-ubuntu-12.04"
     scratch.vm.hostname = "scratch"
     scratch.vm.network :private_network, ip: "192.168.43.6"
-
-    # Using the chef-client provisioner in part because vagrant-berkshelf plugin does not
-    # support multi-machine vagrantfiles.  Not entirely happy with this, either, since
-    # the 'cleanup' feature has a bug so node/client aren't deleted from server.  But don't
-    # think I want to use chef_zero provisioner, either, since with multi-machine I want
-    # to control the launch & teardown of the server across multiple nodes.
-    scratch.vm.provision "chef_client" do |chef|
-      if ENV['CHEF_ZERO'] then
-        chef.chef_server_url =         "http://192.168.43.1:8889"
-      else
-        chef.chef_server_url =         "https://api.opscode.com/organizations/demo-v2"
-      end
-      chef.chef_server_url = "http://192.168.43.1:8889"
-      chef.validation_key_path = "../.chef/demo-v2-validator.pem"
-      chef.environment = "test"
-      chef.add_role "integration"
-    end
   end
 
 end
