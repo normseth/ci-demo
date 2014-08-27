@@ -1,0 +1,157 @@
+private side of the buildmeister and jenkins keys are in ~ec2-user on 54.187.137.180
+
+Issues with current role-builderserver cookbook:
+- doesn't account for master/slave
+x user creation/management is mish-mash of hack and jenkins_user resources
+o still hacking out security rather than enabling chef
+x assumes webhook rather than polling github
+x poorly documented.
+- need to rename, including a grep for the old name(s)
+x need to automate slave node registration
+
+
+think i want to learn a bit of rails from ground up, first: rails tutorial.
+then look at the intercity/chef-repo cookbook to automate.
+
+Here's my raw command history
+
+    1  ruby -v
+    2  sudo apt-get update
+    3  ruby -v
+    4  which rvm
+    5  curl -sSL https://get.rvm.io | bash -s stable
+    6  sudo apt-get install curl
+    7  curl -sSL https://get.rvm.io | bash -s stable
+    8  source /home/vagrant/.rvm/scripts/rvm
+    9  rvm requirements
+   10  rvm
+   11  rvm requirements
+   12  rvm install 2.0.0
+   13  ruby -v
+   14  sudo apt-get update
+   15  ruby -v
+   16  which rvm
+   17  curl -sSL https://get.rvm.io | bash -s stable
+   18  sudo apt-get install curl
+   19  curl -sSL https://get.rvm.io | bash -s stable
+   20  source /home/vagrant/.rvm/scripts/rvm
+   21  rvm requirements
+   22  rvm
+   23  rvm requirements
+   24  rvm install 2.0.0
+   25  ruby -v
+   26  sudo apt-get update
+   27  ruby -v
+   28  which rvm
+   29  curl -sSL https://get.rvm.io | bash -s stable
+   30  sudo apt-get install curl
+   31  curl -sSL https://get.rvm.io | bash -s stable
+   32  source /home/vagrant/.rvm/scripts/rvm
+   33  rvm requirements
+   34  rvm
+   35  rvm requirements
+   36  rvm install 2.0.0
+   37  ruby -v
+   38  sudo apt-get update
+   39  ruby -v
+   40  which rvm
+   41  curl -sSL https://get.rvm.io | bash -s stable
+   42  sudo apt-get install curl
+   43  curl -sSL https://get.rvm.io | bash -s stable
+   44  source /home/vagrant/.rvm/scripts/rvm
+   45  rvm requirements
+   46  rvm
+   47  rvm requirements
+   48  rvm install 2.0.0
+   49  ping 4.2.2.1
+   50  rvm install 2.0.0
+   51  history
+   52  rvm use 2.0.0@railstutorial_rails_4_0 --create --default
+   53  which gem
+   54  gem update --system 2.1.9
+   55  vi ~/.gemrc
+   56  rvm gemset list
+   57  gem install rails --version 4.0.8
+   58  rails -v
+   59  sudo apt-cache search libxslt-dev
+   60  sudo apt-cache info libxslt-dev
+   61  sudo apt-cache
+   62  sudo apt-cache show libxslt-dev
+   63  sudo apt-get
+   64  sudo apt-cache show curl
+   65  dpkg --get-selections | grep -v deinstall
+   66  sudo apt-get install libxslt-dev libxml2-dev libsqlite3-dev
+   67  history
+   68  mount
+   69  cd /rails_projects/
+   70  ls
+   71  rails new first_app
+   72  rvm gemset list
+   73  gem list
+   74  ls
+   75  bundle update
+   76  cd first_app/
+   77  bundle update
+   78  rails server
+   79  sudo apt-cache search nodejs
+   80  sudo apt-get install nodejs
+   81  rails server
+   82  history
+
+
+
+Now, on to a test environment and deployment...
+
+x set up test node, using pg but otherwise still manual and same as dev
+x test with first_app
+x re-create dev node
+create demo_app to point where running rspec tests against it
+set up buildslave01 with rails stack (manually, last time!)
+create jenkins job to run tests
+chefify the infrastructure setup
+validate
+chefify the deployment
+validate
+deploy as jenkins job
+validate
+
+
+
+# note that didn't need to modify for authentication with rails, but fyi: http://linuxrails.blogspot.com/2012/06/postgresql-setup-for-rails-development.html
+
+
+got a little sideways with gems, postgres, capybara, rails environment.
+straightened out by installing postgres on dev, then running bundler only excluding production.
+had previously excluded both test and production because development didn't have the prereqs to successfully install pg gem.
+
+
+When it comes to deploying, the steps are:
+Push code to Github.
+Pull code from Github.
+Run rake db:migrate.
+Run RAILS_ENV=test rails server.
+
+https://www.digitalocean.com/community/tutorials/how-to-scale-ruby-on-rails-applications-across-multiple-droplets-part-1
+
+Setting Up Full Stack on RDEV
+
+starting from previously set up rails + rvm + postgresql vm
+gem install unicorn
+vi config/unicorn.rb
+sudo apt-get install nginx
+vi /etc/nginx/conf.d/microblog_ruby.conf
+sudo service nginx start
+
+
+
+
+git clone https://github.com/normseth/microblog_ruby.git
+cd microblog_ruby/
+bundle install --deployment --without production
+bundle exec rake db:migrate
+#bundle exec rspec spec/requests/static_pages_spec.rb
+bundle exec unicorn_rails
+
+
+http://stackoverflow.com/questions/20620724/how-to-lazily-evaluate-an-arbitrary-variable-with-chef
+http://www.cloudycoding.com/blog/2013/11/23/testing-with-chef-zero/

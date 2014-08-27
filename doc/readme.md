@@ -7,7 +7,7 @@ Ubuntu 12.04 LTS as platform for all nodes.
 Git repo and directory structure shown below.  No sub-repos or symlinking to fake things out.  May refactor later.
 ```
 demo-v2/            # repo = demo-v2
-  chef-repo/        # repo = demo-v2
+  chef-repo/        # standalone repo
   .chef/            # repo = demo-v2
   cookbooks/        # not in any repo
     build_master/   # standalone repo
@@ -33,11 +33,12 @@ The Vagrantfile is set up so that it can have multiple machines defined.  All th
 * rdev  # ruby on rails development environment
 * rtest # ruby on rails test environment
 
-I have the chef-client provisioner configured, with the same toggle control for using chef-zero or a permanent server that I use in my knife configuration.  I use the chef_client provisioner -- rather than either chef_solo or chef_zero for a couple of reasons:
+I don't use any provisioner, for a combination of reasons:
+* If using chef-client, vagrant doesn't create a client.rb file in the node  (by design -- see https://github.com/mitchellh/vagrant/issues/1145).  This means you can't just run 'sudo chef-client' from within the node.
 * If using chef_solo, I would want to use berkshelf, but the berkshelf-vagrant plugin doesn't currently support a multi-machine vagrant file.
-* When using chef_zero, vagrant controls the setup and teardown of the server, and I presume does so with a single VM in mind.  I want to use my server across the multiple machines, so I want to control its life cycle.
+* If using chef_zero, vagrant controls the setup and teardown of the server, and I presume does so with a single VM in mind.  I want to use my server across the multiple machines, so I want to control its life cycle.
 
-TODO: Script load/unload using knife backup 
+TODO: Script load/unload using knife backup
 
 ### SSH
 
@@ -109,6 +110,7 @@ I have a cookbook that does this (more or less) already, although I will need to
 The slave is where build and test jobs will be run.  In the context of a rails application, this means it will be provisioned with requirements for both Jenkins and rails.  
 
 TODO: Understand and document the orchestration necessary to ensure master and slave are both up and connected.
+TODO: Fix security (see recipe note)
 If you aren't familiar with Jenkins' master/slave topology, you can read about it here: https://wiki.jenkins-ci.org/display/JENKINS/Distributed+builds.
 
 ## Application Environment

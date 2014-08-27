@@ -14,6 +14,8 @@ Made some changes.  Exact nature not relevant, but process is:
   Iterated over my cookbook, forcing the upload with knife as needed (not bumping version).
 At the end of the day, I have a two-node Jenkins cluster up & running, although the slave doesn't yet have the Ruby on Rails stack to support my demo application.
 
+TODO: Fix security for Jenkins.  Currently broken, but not blocking.  Issue is that my config-file hack gets over-written somewhere, and is fragile, in any case, because slaves are also configured in the same file.
+
 ### Application Environment
 I could go straight to the community and find a cookbook to set up my rails stack, but I'm going to take a lower-level approach at first, to ensure I understand the infrastructure.  The gist is that I'm going to manually install the infrastructure on a fresh VM, capturing the steps in my command history file.  At the end, I'll distill it down to just the tasks I need to automate (skipping all digressions & mistakes), and build or borrow recipes to suit.
 
@@ -213,17 +215,96 @@ possible caveat: when starting manually, need to pass environment RAILS_ENV=test
 
 ## Continuously Integrating Infrastructure Code
 
-In the context of my infrastructure code -- i.e. automated provisioning via Chef -- I want to test at a few different levels, each time code is checked in:
-* lint / static analysis
-* unit tests
-* integration tests
+In the context of my infrastructure code, there are a few different things I want to accomplish:
+* On each checkin of infrastructure code, I want to run lint / static analysis tests against it.
+* On each checkin of infrastructure code, I want to run unit tests against it.  (Note that I'm implying that failures in lint / static analysis should not block unit tests.)
+* On successful completion of unit tests, I want to converge an "integration" node and run integration tests against it.  This node will also be a Jenkins slave, although not the same one as used for application CI.  
+The tasks above represent the CI pipeline for my infrastructure code.  Following successful completion, I _may_ want to deploy application code to it and run integration tests for the application, but I'm going to consider that part of the application's CI pipeline, and deal with it later.
 
+
+### Lint / Static Analysis
+I don't need a converged node on which to run static code analysis tools, but I do need those tools installed on _some_ Jenkins node, and I'm planning to execute them on a slave.  So, I modify my generic slave recipe to be 'slave-ruby' and add RVM installation to it.  Against my 'scratch' VM, bootstrapping now looks like:
+```
+knife bootstrap 192.168.43.6 -x vagrant -P vagrant --sudo --run-list 'recipe[build-master::slave-ruby]' --environment 'test'
+```
+
+Add a deploy key for the rails_infrastructure repository, and create a user in Jenkins.  The command to create the key is similar to:
+```
+ssh-keygen -t rsa -C "devops@level11.com"
+```
+
+Put this into the same data bag as our other credential.
+```
+cat ~/.ssh/jenkins-ci | sed s/$/\\\\n/ | tr -d '\n'
+```
+Update that data bag.
+```
+knife data_bag from file creds git_creds.json
+```
+This is going to spur me create an environment for my CI infrastructure -- not a bad thing, but not something that I'd bothered with, previously.  
+Create the file and then the environment.
+Put the existing VMs into the environment with
+```
+knife exec -E 'nodes.transform("name:build*") { |n| n.chef_environment("ci") }'
+```
+Add resource to master recipe to create credential based on the key.  Converge the master.
+
+Looking down the road, I can see I'm going to want to the data bags elsewhere within my CI environment.  I've previously ignored them with .gitignore -- I don't want the files showing up in GitHib.  But now I'm going to write them back to the filesystem in their encrypted, JSON-formatted form.  These files I can then treat as "normal" data bags.
+
+
+...
+
+Create a slave node (scratch) and a job (rails_infrastructure_foodcritic) using the Jenkins UI.
+
+Run the job, see the results.  Fix them, re-run the job.
+
+References for this section:
+http://acrmp.github.io/foodcritic/#ci
+
+### Unit Tests
+
+Unit testing Chef code relies on ChefSpec.
+
+#### Do I need to unit test my third-party code?
 ### Integration Tests
 
-Install serverspec gem ```gem install serverspec```
-Create spec directory
-Create Rakefile, roles.yml and spec/spec_helper.rb per the Advanced instructions on ServerSpec.org
+For integration testing, I'm going to use ServerSpec.
+As I described earlier, these tests will run, post-convergence, on a node that is both a Jenkins slave and a full-stack server for my rails infrastructure.  I use knife to create a role that encapsulates this in its runlist.  The role definition looks like:
+```
+# chef-repo/roles/integration.rb
+name 'integration'
+description 'rails stack in a single machine, plus jenkins slave requirements'
+run_list 'recipe[build-master::slave-ruby]','recipe[rails_infrastructure::default]'
+```
 
+#### Job Workflow for Integration Tests
+
+Start with last successfully unit-tested code.
+Pull code to slave.
+Pull chef-repo files to slave.
+Vendor cookbook dependencies.  # Could do this earlier
+Knife solo prep a container    # Or launch and populate chef-zero with import + berkshelf
+Converge container (knife solo cook or bootstrapping to chef-zero)
+Rake spec tests against container
+Terminate container
+Terminate chef-zero (if used)
+
+
+Add serverspec gem as default to be installed by build-master::slave-ruby.  This is done by adding to attribute hash in build-master attributes file.  Manually, would be ```gem install serverspec```.
+Sidebar: The first time I converged a node, I discovered that I had conflicting global gem definitions in the rails_infrastructure and build-master cookbooks.  I decided to resolve these by adding an attribute to my role which correctly defines the set.
+
+Now I can bootstrap the (previously launched) VM:
+```
+knife bootstrap 192.168.43.6 -x vagrant -P vagrant --sudo --run-list 'role[integration]' --environment 'test'
+```
+
+### Setting Up ServerSpec
+Create spec directory
+Create Rakefile, serverspec_properties.yml and spec/spec_helper.rb per the Advanced instructions on ServerSpec.org.
+Want to keep integration and unit tests separate, so create a spec/integration directory, and then make role-specific subdirectories there.
+Have set up spec_helper.rb to execute tests via SSH.  This creates a dependency on some sort of credential, which I'll probably manage with an ssh_config and data bag.  
+
+### Writing Tests
 
 ## Continuously Integrating Application Code
 
