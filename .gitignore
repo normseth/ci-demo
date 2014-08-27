@@ -4,6 +4,9 @@ cookbooks
 # Same for demo apps
 rails_projects
 
+# Same for chef-repo
+chef-repo
+
 # Exclude databag decryption key
 .chef/encrypted_data_bag_secret
 
