@@ -21,4 +21,4 @@ cookbook_license        "All rights reserved"
 cookbook_email          "nikormseth@level11.com"
 
 # Encyption key for data bags
-knife[:secret_file] = "#{current_dir}/encrypted_data_bag_secret"
+#knife[:secret_file] = "#{current_dir}/encrypted_data_bag_secret"
