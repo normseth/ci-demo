@@ -7,5 +7,3 @@ rails_projects
 # Exclude databag decryption key
 .chef/encrypted_data_bag_secret
 
-# Exclude unencrypted data bags
-chef-repo/data_bags/creds
