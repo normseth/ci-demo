@@ -155,3 +155,12 @@ bundle exec unicorn_rails
 
 http://stackoverflow.com/questions/20620724/how-to-lazily-evaluate-an-arbitrary-variable-with-chef
 http://www.cloudycoding.com/blog/2013/11/23/testing-with-chef-zero/
+
+
+   43  /opt/chef/bin/chef-zero --host 192.168.43.3 --daemon
+   52  knife environment from file test.rb
+   53  knife environment from file ci.rb
+   54  knife role from file integration.rb
+   55  knife data bag create creds
+   56  knife data bag from file creds git_creds.json
+   57  knife data bag from file creds db_creds.json

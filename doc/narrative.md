@@ -250,7 +250,9 @@ knife exec -E 'nodes.transform("name:build*") { |n| n.chef_environment("ci") }'
 Add resource to master recipe to create credential based on the key.  Converge the master.
 
 Looking down the road, I can see I'm going to want to the data bags elsewhere within my CI environment.  I've previously ignored them with .gitignore -- I don't want the files showing up in GitHib.  But now I'm going to write them back to the filesystem in their encrypted, JSON-formatted form.  These files I can then treat as "normal" data bags.
-
+Comment out --secret-file directive from knife.rb
+knife data bag show... -Fj > file
+Check files into git.
 
 ...
 
@@ -280,11 +282,17 @@ run_list 'recipe[build-master::slave-ruby]','recipe[rails_infrastructure::defaul
 #### Job Workflow for Integration Tests
 
 Start with last successfully unit-tested code.
+Need either a deploy key or an SSH key.  For moment just copied my key into buildslave.
+Did same for encrypted data bag key
 Pull code to slave.
-Pull chef-repo files to slave.
-Vendor cookbook dependencies.  # Could do this earlier
-Knife solo prep a container    # Or launch and populate chef-zero with import + berkshelf
-Converge container (knife solo cook or bootstrapping to chef-zero)
+Pull chef-repo files to slave. # Stubbed pem client and validator files and knife config for chef-zero here.  Had to force it into git, since by default I'm ignoring .pem files.
+Pull cookbook dependencies with Berkshelf.  # Could do this earlier & vendor them
+Get knife.rb into path by hook or crook
+PATH=/opt/chef/embedded/bin berks install
+PATH=/opt/chef/embedded/bin berks upload
+Requires berkshelf be on slave, so add to slave-ruby recipe.  Note that in order to get this to build on the VM, I then had to raise memory to 2048 and CPUs to 2.  Otherwise, it swapped and timed out on the build.
+Launch and populate chef-zero # Or knife solo prep
+Launch and converge container (knife solo cook or bootstrapping to chef-zero)
 Rake spec tests against container
 Terminate container
 Terminate chef-zero (if used)
