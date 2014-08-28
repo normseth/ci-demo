@@ -10,3 +10,5 @@ chef-repo
 # Exclude databag decryption key
 .chef/encrypted_data_bag_secret
 
+# Exclude my scratch space
+tmp
