@@ -164,3 +164,32 @@ http://www.cloudycoding.com/blog/2013/11/23/testing-with-chef-zero/
    55  knife data bag create creds
    56  knife data bag from file creds git_creds.json
    57  knife data bag from file creds db_creds.json
+
+
+
+
+## Your Orchestration Ain't Like My Orchestration
+
+Automation takes place within servers and across servers.
+Search notwithstanding, Chef cookbooks are mostly focused within servers.
+CI pipelines are an example of automation across servers, i.e. of orchestration.
+Orchestration is more susceptible to constraints that are particular to an organization.
+Put another way: My cookbook doesn't change, whether my VMs run in Vagrant or EC2.  But my orchestration may have some significant differences.
+
+## Digression Regarding Security
+
+I've classified credentials by the consequences of their being compromised:
+* Worst: AWS
+* Bad: GitHub deploy keys
+* Trivial: Chef-Zero keys & data bag secrets
+
+And I can group credential use cases into two buckets:
+* Creds that grant access to "persistent" services, such as GitHub or an AWS console
+* Creds that grant access to transient services, such as the VMs launched for a set of integration tests (and destroyed afterwards).
+
+
+The solution I've implemented is to use "two" Chef Servers:
+* For local/isolated development and CI, I use Chef Zero, an in-memory Chef Server which can be populated directly from the local filesystem (i.e. from local git repositories).
+* For CI infrastructure and persistent environments (e.g. production), I use a hosted Chef Server instance.  (And in fact, I sometimes use a second Chef-Zero instance here, if I'm working offline.)
+
+By splitting my servers in this way, I can impose tight control on sensitive data, viz. credentials, used in persistent infrastructure, while allowing insecure keys to be checked into source control and used in short-lived testing environments.

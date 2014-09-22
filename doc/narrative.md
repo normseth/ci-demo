@@ -1,31 +1,49 @@
 ## Getting Started
 
 ### CI Infrastructure
-Created a project directory.
-Initialized git; set exclusions.
-Defined build master and slave VMs in Vagrantfile.
-Cloned build-master into cookbooks.
-Made some changes.  Exact nature not relevant, but process is:
-  Launched VM.
-  Set environment for chef-zero.
-  Ran berks install from role-buildserver to get cookbook dependencies.
-  Ran berks upload to push all cookbooks into chef-zero.
+Create a project directory.
+Initialize git; set exclusions.
+Define build-master and slave VMs in Vagrantfile.
+Launch jenkins master and slave VMs.
+Make entries in .ssh/config.
+Create build-master in cookbooks directory.
+Run berks install
+If using chef zero
+  Set environment for chef-zero
+  Launch using knife serve
+  Populates itself from chef-repo
+  Run berks install / berks upload to get cookbooks & dependencies
+  
   Bootstrapped manually with knife.
   Iterated over my cookbook, forcing the upload with knife as needed (not bumping version).
-At the end of the day, I have a two-node Jenkins cluster up & running, although the slave doesn't yet have the Ruby on Rails stack to support my demo application.
 
-TODO: Fix security for Jenkins.  Currently broken, but not blocking.  Issue is that my config-file hack gets over-written somewhere, and is fragile, in any case, because slaves are also configured in the same file.
+At the end of the day, I have a two-node Jenkins cluster up & running.
+* Master node has Jenkins and chef installed.
+* Slave node has Jenkins agent requirements only, chef, and chef testing tools.
 
-### Application Environment
-I could go straight to the community and find a cookbook to set up my rails stack, but I'm going to take a lower-level approach at first, to ensure I understand the infrastructure.  The gist is that I'm going to manually install the infrastructure on a fresh VM, capturing the steps in my command history file.  At the end, I'll distill it down to just the tasks I need to automate (skipping all digressions & mistakes), and build or borrow recipes to suit.
+## Open Issues
+* Security for Jenkins.  Currently broken, but not blocking.  Issue is that my config-file hack gets over-written somewhere, and is fragile, in any case, because slaves are also configured in the same file.  Should fix by enabling security through Chef cookbook, but that means figuring out groovy syntax.
+
+* kitchen-ec2 doesn't create ohai hint file.  Options include patching the gem, touching the file on the AMI,
+
+
+When you combine all my design decisions and setup steps, here are the steps I go through to launch a jenkins slave:
+cd vagrant
+vagrant up buildslave01
+cd ../cookbooks/build-master
+berks install
+berks upload
+knife cookbook upload build-master --force
+ssh slave01
+knife bootstrap slave01 -x vagrant --sudo --run-list 'recipe[build-master::slave-ruby]' --environment ci --secret-file XXXXX
+And once the node is up and converged, need to add it as slave in jenkins ui and tag it for chef jobs
+
+### Application Development Environment
+I could go straight to the community and find a cookbook to set up my rails stack, but I'm going to take a lower-level approach at first, to ensure I understand the infrastructure.  The gist is that I'm going to manually install the infrastructure on a fresh VM, capturing the steps in my command history file.  At the end, I'll distill it down to just the tasks I need to automate (skipping all digressions & mistakes), and build or borrow recipes to suit.  This will also help when I want to chef-ify the entire infrastructure, later.
 
 I'm working from this document: http://www.railstutorial.org/book/beginning#sec-up_and_running
 
-NOTE: This section conflates application code and infrastructure, and doesn't actually cover several components of the infrastructure requirements (nginx, passenger, etc.).
-
-TODO: Address previous note, then address how infrastructure code gets applied to a jenkins slave in a dynamic, automated fashion.  Could be that master is configured with nodes dynamically, or could be that they're booted and provisioned from code, then torn down.
-
-And here's my distilled command history, once I have my first application up & running.  At this point, this is just a development stack (aka group, as defined in first_app/Gemfile):
+Here's my distilled command history, once I have my first application up & running.  At this point, this is just a development stack (aka group, as defined in first_app/Gemfile).  It also lacks two elements of the stack that are common, an application server and a load balancer.  These will come later.
 ```
 sudo apt-get update
 sudo apt-get install curl git -y
@@ -56,10 +74,9 @@ BTW, I'm sharing the folder in which I've created the application between my lap
 Initialize a git repository, and set up a remote origin on GitHub.
 
 I built the 'rdev' VM by hand to get some insight into the rails stack.
-The rails tutorial I'm working from deploys to Heroku, but that's not what I want in this case.
-Instead, I want to define a new VM (which may eventually become a cluster of them) that I can build provision with Chef, and deploy to using Chef (or possibly Capistrano).
 
-I'll call this VM 'rtest'.
+I also want an 'rtest' VM, to use for pre-commit testing.
+
 To reinforce & further my understanding of rails, I'm going to set up the rtest VM manually.
 The only difference I want is to use postgresql rather than sqlite.
 I mostly follow the steps from the development setup, although I skip the steps for creating the app, since I'm going to deploy it to this VM via GitHub.  (Note that trying to share the files directly, as I've done between laptop and rdev, would be a mistake.  I'm going to have gem differences between these environments, so they will have different bundler configurations.  Rails configures git to ignore .bundle, which facilitates such differences when deploying.)
@@ -221,12 +238,14 @@ In the context of my infrastructure code, there are a few different things I wan
 * On successful completion of unit tests, I want to converge an "integration" node and run integration tests against it.  This node will also be a Jenkins slave, although not the same one as used for application CI.  
 The tasks above represent the CI pipeline for my infrastructure code.  Following successful completion, I _may_ want to deploy application code to it and run integration tests for the application, but I'm going to consider that part of the application's CI pipeline, and deal with it later.
 
+Tests Structure
+Directory called 'test'  # Default for T-K and can't find where to change, whereas rspec pass path
+Tests with cookbook  # some desire to have above (multiple cookbooks) but anticipate would fall under a single cookbook, eventually, in any case (role).  May have to revisit/refactor.
 
 ### Lint / Static Analysis
-I don't need a converged node on which to run static code analysis tools, but I do need those tools installed on _some_ Jenkins node, and I'm planning to execute them on a slave.  So, I modify my generic slave recipe to be 'slave-ruby' and add RVM installation to it.  Against my 'scratch' VM, bootstrapping now looks like:
-```
-knife bootstrap 192.168.43.6 -x vagrant -P vagrant --sudo --run-list 'recipe[build-master::slave-ruby]' --environment 'test'
-```
+I don't need a converged node on which to run static code analysis tools, but I do need those tools installed on my Jenkins slave.  
+
+Add them as chef gems to slave-ruby recipe.
 
 Add a deploy key for the rails_infrastructure repository, and create a user in Jenkins.  The command to create the key is similar to:
 ```
@@ -241,13 +260,13 @@ Update that data bag.
 ```
 knife data_bag from file creds git_creds.json
 ```
-This is going to spur me create an environment for my CI infrastructure -- not a bad thing, but not something that I'd bothered with, previously.  
+This is going to spur me create an environment for my CI infrastructure -- probably a good thing, but not something that I'd bothered with, previously.  
 Create the file and then the environment.
 Put the existing VMs into the environment with
 ```
 knife exec -E 'nodes.transform("name:build*") { |n| n.chef_environment("ci") }'
 ```
-Add resource to master recipe to create credential based on the key.  Converge the master.
+Add resource to build-master recipe to create credential based on the key.  Converge the master.
 
 Looking down the road, I can see I'm going to want to the data bags elsewhere within my CI environment.  I've previously ignored them with .gitignore -- I don't want the files showing up in GitHib.  But now I'm going to write them back to the filesystem in their encrypted, JSON-formatted form.  These files I can then treat as "normal" data bags.
 Comment out --secret-file directive from knife.rb
@@ -266,45 +285,167 @@ http://acrmp.github.io/foodcritic/#ci
 ### Unit Tests
 
 Unit testing Chef code relies on ChefSpec.
+Ref for chef_gem problem (seen with chef-sugar) https://github.com/sethvargo/chefspec/issues/336
+Common examples after setting up show something like 'rspec apache' where apache is the name of the cookbook.  This catches all spec tests in the cookbook, which is a problem (I don't want to run my integration tests right now).  Pass the name of the subdirectory you want, as in: 'rspec spec apache/spec/unit'
+Also, if using berkshelf for cookbook dependencies, require chefspec/berkshelf in your spec_helper.rb file.
 
 #### Do I need to unit test my third-party code?
 ### Integration Tests
 
-For integration testing, I'm going to use ServerSpec.
-As I described earlier, these tests will run, post-convergence, on a node that is both a Jenkins slave and a full-stack server for my rails infrastructure.  I use knife to create a role that encapsulates this in its runlist.  The role definition looks like:
-```
-# chef-repo/roles/integration.rb
-name 'integration'
-description 'rails stack in a single machine, plus jenkins slave requirements'
-run_list 'recipe[build-master::slave-ruby]','recipe[rails_infrastructure::default]'
-```
+For integration testing, I'm going to write tests in ServerSpec and drive them using Test-Kitchen.
+As I described earlier, these tests will be executed from a Jenkins slave against a full-stack server for my rails infrastructure.  
+Add chef_gems for integration testing to build-master::slave-ruby recipe, similar to how I added static/lint earlier.
 
 #### Job Workflow for Integration Tests
 
-Start with last successfully unit-tested code.
-Need either a deploy key or an SSH key.  For moment just copied my key into buildslave.
-Did same for encrypted data bag key
-Pull code to slave.
-Pull chef-repo files to slave. # Stubbed pem client and validator files and knife config for chef-zero here.  Had to force it into git, since by default I'm ignoring .pem files.
+x Start with last successfully unit-tested rails_infrastructure code and ci-chef-repo.
+x Need either a deploy key or an SSH key.  For moment just copied my key into buildslave & chmod 400.  When running as Jenkins job will get the credential from the job.
+x Put encrypted data bag key into ci-chef-repo.
+x Put Vagrant insecure private key (also chmod 400) into slave-ruby and converge
+x Pull code to slave.
+x git clone git@github.com:normseth/rails_infrastructure.git
+x Pull chef-repo files to slave.
+x git clone git@github.com:normseth/ci-chef-repo.git chef-repo
+x Stubbed pem client and validator files and knife config for chef-zero here.  Had to force it into git, since by default I'm ignoring .pem files.
+x Get knife.rb into path by hook or crook  # Doing this by checking rails_inf into subdirectory
+o Copied .ssh/config  # think this is optional.  skipping....
+x and insecure_private_key to buildslave   # added to slave-ruby with data bag
+NOTE: os_creds.json should not be included in ci-chef-repo
+x Change chef_server_url  # environment variable injected into job with jenkins plugin
+cd rails_infrastructure
 Pull cookbook dependencies with Berkshelf.  # Could do this earlier & vendor them
-Get knife.rb into path by hook or crook
-PATH=/opt/chef/embedded/bin berks install
-PATH=/opt/chef/embedded/bin berks upload
-Requires berkshelf be on slave, so add to slave-ruby recipe.  Note that in order to get this to build on the VM, I then had to raise memory to 2048 and CPUs to 2.  Otherwise, it swapped and timed out on the build.
-Launch and populate chef-zero # Or knife solo prep
-Launch and converge container (knife solo cook or bootstrapping to chef-zero)
-Rake spec tests against container
-Terminate container
-Terminate chef-zero (if used)
+x PATH=/opt/chef/embedded/bin:$PATH berks vendor ../../berks-cookbooks   # should vendor this ; path now in job env # berks vendor won't write to an already existing directory
+x PATH=/opt/chef/embedded/bin:$PATH berks upload   # copy into cookbooks and use knife serve in job
+x # Requires berkshelf be on slave, so add to slave-ruby recipe.  Note that in order to get this to build on the VM, I then had to raise memory to 2048 and CPUs to 2.  Otherwise, it swapped and timed out on the build.
+x Launch and populate chef-zero (or knife solo prep)   # using knife serve in job
+
+    cd cookbooks/rails_infrastructure
+    berks vendor ../../berks-cookbooks
+    cd ../..
+    cp -r berks-cookbooks/* cookbooks
+    knife serve --chef-repo-path . --chef-zero-host $CHEF_SERVER_IP --chef-zero-port 8889 --repo-mode static &
 
 
-Add serverspec gem as default to be installed by build-master::slave-ruby.  This is done by adding to attribute hash in build-master attributes file.  Manually, would be ```gem install serverspec```.
-Sidebar: The first time I converged a node, I discovered that I had conflicting global gem definitions in the rails_infrastructure and build-master cookbooks.  I decided to resolve these by adding an attribute to my role which correctly defines the set.
+Or alternative to the above, using test kitchen:
 
-Now I can bootstrap the (previously launched) VM:
+
+
+o Launch container/VM    # pre-launched, initially
+
+
+
+Converge container/VM (knife solo cook or bootstrapping to chef-zero)
+Run tests
+
+STATUS: Unsure whether to use test-kitchen with zero or client provisioner.  If zero, some of the above is moot, since don't need to run knife serve.
+TODO: Get the above working, through integration tests, in as repeatable a fashion as possible, using local VMs and EC2.  Document both paths.
+
+
+
 ```
-knife bootstrap 192.168.43.6 -x vagrant -P vagrant --sudo --run-list 'role[integration]' --environment 'test'
+knife bootstrap 192.168.43.6 -x vagrant -P vagrant --sudo --run-list 'recipe[rails_infrastructure]' --environment 'test' --secret-file /home/vagrant/chef-repo/.chef/insecure_data_bag_secret
 ```
+Rake spec tests against vm/container
+
+And I can execute tests against it from the slave node:
+```
+/usr/local/rvm/bin/rvm-shell 2.0.0
+PATH=/opt/chef/embedded/bin:$PATH rake spec
+```
+
+Now drive the same with Test Kitchen.
+Re-bootstrap scratch node from my laptop (for now).
+Run kitchen init in chef-repo.  
+Edit .kitchen.yml to be as follows:
+
+```
+---
+driver:
+  name: vagrant
+
+provisioner:
+  name: chef_zero
+  # Don't do the . paths, below; fakes out chef-zero
+  #data_bags_path: .
+  encrypted_data_bag_secret_key_path: ./.chef/insecure_encrypted_data_bag_secret
+  #environments_path: .
+  require_chef_omnibus: true
+
+platforms:
+  - name: ubuntu-12.04
+    driver:
+      box: opscode-ubuntu-12.04
+      box_url: https://opscode-vm-bento.s3.amazonaws.com/vagrant/opscode_ubuntu-12.04_provisionerless.box
+      network:
+        - ["private_network", {ip: "192.168.43.6"}]
+suites:
+  - name: default
+    run_list: recipe[rails_infrastructure]
+    provisioner:
+      client_rb:
+        environment: test
+    attributes:
+```
+
+Environments & roles have to be defined as JSON.  Previously have had them as .rb, so convert.
+Tests default to a particular location & naming scheme; configurable but not sure how.  
+Resolve for the moment by rearranging a little in my cookbook, and symlinking from chef-repo.
+kitchen create/converge/verify/destroy/test now work.
+
+Sidebar: I've enabled SSH into my laptop, which means that I can now launch a vagrant VM from a vagrant VM.
+ssh -i ~/.ssh/id_rsa normseth@192.168.43.1 "cd demo-v2/vagrant ; vagrant up scratch"
+
+
+### AWS Cloudformation
+
+aws cloudformation create-stack --stack-name ci-demo --template-body file:///Users/normseth/demo-v2/cfn_templates/VPCSingleSubnet.template --tags Key="owner",Value="nik"
+
+This is a really poor error message.  It may point to an invalid security group name:
+Message: InvalidParameterCombination => The parameter groupName cannot be used with the parameter subnet
+
+Had problem getting test kitchen to launch VM with a public ip, even though had flag explicitly set to true.
+
+Tried not setting at all -- no good.
+Tried ubuntu 1204 instead of 1404 -- no good.
+Found subnet setting EC2 console to add by default.
+Looked for same in CFN but no property that seems to apply.
+Enabled via console and works -- very poor form, this.
+
+
+### Using Docker for Integration Tests
+
+This is an experiment, and one of the first things I've learned is that it will be easier with Ubuntu 14.04 than 12.04.  So, I've defined a new node in Vagrantfile and am proceeding with it.
+Vagrant up the node
+Bootstrap the node with run-list build-master::slave-ruby and environment ci
+Set attribute so build-essential installs during compile phase.
+Add resources to slave-ruby to install docker.  Wrap these in test for Ubuntu 14.04.
+Pull an ubuntu 12.04 docker image.
+Run the image, apt-get update, install curl, install chef.
+Commit the image.
+```
+docker pull ubuntu:12.04
+docker run -t -i ubuntu:12.04 /bin/bash
+# apt-get & curl commands within container...
+docker commit -m "installed omnibus chef" -a "Nik Ormseth" 0295e5cd96c2 ubuntu:12.04_chef
+docker run -t -i ubuntu:12.04_chef /bin/bash
+```
+This experiment starts to get a little murky now.
+My goal is a container that I can launch, provision, test, and destroy from within my CI pipeline.
+Tests are remote, which is to say that they either treat the provisioned node as a black box, or they need to execute in a shell within the node.  But docker containers don't run SSH by default, and doing so just for this purpose seems a little wrong.  The nsenter utility might provide a solution, but I'm not sure how to integrate it with ServerSpec.  Going to set this aside for now.
+Some useful reading for when I pick it back up:
+* http://jpetazzo.github.io/2014/06/23/docker-ssh-considered-evil/
+* https://github.com/jpetazzo/nsenter
+* http://www.tommyblue.it/
+* http://docs.getchef.com/containers.html
+* https://www.youtube.com/watch?v=oj7cdZITpds (slides for this are also on slideshare)
+* http://docs.getchef.com/config_yml_kitchen.html
+* https://rubygems.org/search?utf8=%E2%9C%93&amp;query=kitchen-
+
+Docker and Test Kitchen (?!)
+Tried this out as an alternate path to the above.
+Kitchen runs sshd on the container (ok, but I can do that).
+Current "full stack" recipe breaks down at the interfaces/ip selection.
+Note that this will also probably happen with anyhing other than Vagrant, so basically need to fix it now.
 
 ### Setting Up ServerSpec
 Create spec directory
@@ -314,8 +455,28 @@ Have set up spec_helper.rb to execute tests via SSH.  This creates a dependency 
 
 ### Writing Tests
 
+I want to validate the post-convergence state of the node.
+This implies looking at the node as both a black and a white box.
+I expect my test suite will grow over time, as I discover new and interesting ways to screw things up.  But initially, I just want tests that sanity-check each resource in my recipes.
+
+My database tests, for example:
+* Does the postgres OS user exist?
+* Are client and server packages installed?
+* Is the pg gem installed?
+* Is postgresql listening on the expected port?
+* Does the application database exist?
+* Does the application database user exis?
+
+### Tagging Builds
+
+TODO: I want to tag releases that build successfully, but having problem with that in Jenkins with git plugin and multiple SCMs.  Probably user error, but don't want to hang up on it any longer right now.  
+
 ## Continuously Integrating Application Code
 
 My demo application only comes with integration tests.
 <implement/describe>
 Unit tests are a good practice.
+
+
+## Multi-Node Tests
+Kitchen isn't going to work for this...
