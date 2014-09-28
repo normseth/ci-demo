@@ -16,41 +16,44 @@ This document is intended as a reference, describing the intent and finished sta
 
 At a super-high level, here's what I want:
 
-1. A CI Pipeline for Infrastructure Code
+<b>A CI Pipeline for Infrastructure Code
+
 When someone checks in infrastructure code:
-Run lint tests
-Run unit tests
-Run post-convergence tests
-Tag builds that pass for use in application testing
-(?) Trigger a code review
-(?) Update policies in authoritative Chef Server
+1. Run lint tests
+2. Run unit tests
+3. Run post-convergence tests
+4. Tag builds that pass for use in application testing
+5. (?) Trigger a code review
+6. (?) Update policies in authoritative Chef Server
 
-2. A CI Pipeline for Application Code
+<b>A CI Pipeline for Application Code
+
 When someone checks in application code and/or deployment code:
-Run lint tests
-Run unit tests
-Deploy onto freshly-built VM
-Run integration tests
-Deploy latest known-good build onto freshly-built VM
-Upgrade to latest using latest deployment code
-Run integration tests
+1. Run lint tests
+2. Run unit tests
+3. Deploy onto freshly-built VM
+4. Run integration tests
+5. Deploy latest known-good build onto freshly-built VM
+6. Upgrade to latest using latest deployment code
+7. Run integration tests
 
-3. CI Pipeline Configuration
+<b>CI Pipeline Provisioning
+
 Code I can use to rapidly create CI infrastructure, itself:  
-Build servers
-Chef environment
-Credential management
-Event and log management
+1. Build servers
+2. Chef environment
+3. Credential management
+4. Event and log management
 
-4. (Future) Provision and Deploy to a Multi-Node Topology
+<b>(Future) Provision and Deploy to a Multi-Node Topology
 
 ## Design Goals
 
 * Realistic - No skipping the hard problems (such as credential management)
-* Reusability.  As a consultant, I place a higher premium on re-use than people who live in the same organization for years at a time.  What is worthwhile for me to automate may not be the same things that it's worth any one of my clients to pay me to automate.
-* Portability and modularity
-* Transparency
-* Secure credential management
+* Reusable -  As a consultant, I place a higher premium on re-use than people who live in the same organization for years at a time.  Although I want to work at a detailed level here (where the devils usually lie) I am really interested in _patterns_.
+* Portable and modular - Pull out and reuse only those aspects that are relevant to a customer.
+* Transparent - Limit, for now, the reliance on built-in integration between tools (e.g. Berkshelf and Vagrant).
+* Secure credential management - This seems to be skipped in most of the documentation I've found.
 * A balance between central control and security isolation that can pass scrutiny from a Compliance team.
 
 
@@ -93,8 +96,6 @@ For example, to launch and destroy instances in AWS, or to connect services that
 
 I have a few tenets for managing secrets:
 * Do no harm.  Manage secrets at least as securely as existing practices in the organization; improve on them if you can.  
-* If possible, protect secrets with authenticated access control and encryption.
-* Require both authentication and authorization to use a key.
 * Limit the privileges associated with credentials.
 * Monitor keys for abuse.
 
@@ -163,7 +164,7 @@ I need to take two steps as preparation:
 
 Then, when I want to switch from hosted to local mode:
 1. Start chef-zero using ```knife serve``` and load cookbooks, data bags, environments, nodes, clients and roles.
-2. Use ```knife bootstrap``` to "re-bootstrap" the buildmaster and buildlave01 nodes.  Because of the way bootstrapping works, the only thing in the chef-client configuration that gets changed is the URL of the chef server.  
+2. Change the chef_server_url value in /etc/chef/client.rb on the managed nodes.  
 
 As a side-benefit, if I'm concerned about controlling access to my authoritative chef server(s), loading programmitically (and, say, triggering it based on a git check-in and tag) is right in line with the goal locking down that access.
 
@@ -197,27 +198,27 @@ TODO: Describe what sensitive data is/isn't included in source control, and how 
 
 ## Jenkins
 
-The initial setup of Jenkins is intended to be simple but consistent with the trusted status the CI servers will have:
+The initial setup of Jenkins is intended to be simple but consistent with the trusted status the CI servers require:
 * HTTPS with self-signed certificate
-* Authentication enabled with an user defined
+* Authentication enabled with an admin user defined
 * Master and single slave
 
 Slaves execute the jobs to build and test code.  Slaves need to be provisioned with the requirements for Jenkins, testing tools, and the applications they will build & test.  If you aren't familiar with Jenkins' master/slave topology, you can read about it here: https://wiki.jenkins-ci.org/display/JENKINS/Distributed+builds.
 
-As a matter of principle, slaves should also be as like their "real" server counterparts as feasible.  Slave configurations will therefore be tailored to individual application stacks, rather than being set up as universal "Swiss army knives" that can test any application, whether it be Node.js, Ruby, Java, C++, or whatever.
+As a matter of principle, slaves should also be as like their "real" server counterparts as feasible.  Slave configurations will therefore be tailored to individual application stacks, rather than being set up as universal "Swiss army knives" that can test any application, whether it be Node.js, Ruby, Java, C++, etc.
 
 As long as resource considerations allow, I can run all the jobs for a given project (or multiple projects that use the same stack) on a single slave.  With Rails and Chef both based on Ruby, I intend to run the jobs for both the application and infrastructure projects on the same slave node.
 
-Note, however, that while all _jobs_ will run on the same slave, all _tests_ will not.  Lint and unit tests run directly on the slave node.  For integration tests, however, I want nodes that look _exactly_ like production -- i.e. no extra runtimes or libraries to support Jenkins or testing tools.  This means that for integration tests, the slave will launch one or more separate VMs and execute tests against them, remotely.
+Note, however, that while all _jobs_ will run on the same slave, all _tests_ will not.  Lint and unit tests run directly on the slave node.  For integration tests, however, I want nodes that look _exactly_ like production -- i.e. no extra runtimes or libraries to support Jenkins or testing tools.  So for integration tests, the slave will launch one or more separate VMs and execute tests against them, remotely.
 
 Jobs will be created manually.  As a matter of reuse and documentation, I can "export" configured jobs into chef recipes.  This is a practice I'll follow once I have a job pretty well-baked.  Credentials, used with jobs and slaves, will be delivered through chef-vault, as discussed earlier. Converging policies (running chef-client) on Jenkins nodes won't conflict with job or slave definitions, even though these are not automated.
 
-I'm going to set up Jenkins on local Vagrant VMs.  This is ideal for my immediate purposes (prototyping and documenting), but I'm not going to avail myself of all the integration "magic" between chef, berkshelf, vagrant.  Doing so might make my implementation vagrant-specific in some ways, and interfere with re-using it in a shared environment with more persistent VMs.
+Jenkins nodes will be on local Vagrant VMs.  This is ideal for my immediate purposes (prototyping and documenting), but I'm not going to avail myself of all the integration "magic" between chef, berkshelf, and vagrant.  Doing so might make my implementation vagrant-specific in some ways, and interfere with re-using it in a shared environment with more persistent VMs.
 
 
 ## Vagrant
 
-You may have noticed in the directory structure I described earlier, Vagrant configurations are in their own directory, outside of both chef-repo and cookbooks.  This decision stems in part from my desire for transparency in how different tools interact.  At least in this exercise, I want to control the lifecycle of Vagrant VMs and to manage their definitions in a common place.  Conversely, when I put a Vagrantfile inside a cookbook, I start getting confused:
+In the directory structure I described earlier, Vagrant configurations are in their own directory, outside of both chef-repo and cookbooks.  This decision stems in part from my desire for transparency in how different tools interact.  At least in this exercise, I want to control the lifecycle of Vagrant VMs and to manage their definitions in a common place.  Conversely, when I put a Vagrantfile inside a cookbook, I start getting confused:
 * Test-Kitchen uses Vagrant but doesn't read the Vagrantfile.
 * If you run ```berks init``` Berkshelf tries to create its own Vagrantfile.
 
@@ -237,7 +238,7 @@ One other aspect of my Luddite usage of Vagrant: I'm not using any provisioner, 
 * If using chef_zero, vagrant controls the setup and teardown of the server, and I presume does so with a single VM in mind.  I want to use my server across the multiple machines, so I want to control its life cycle.
 * I expect to control provisioning during automated tests using Test Kitchen.
 
-### Version & Plugins
+### Vagrant Version & Plugins
 I've been bitten by version incompatibilities between Vagrant and other tools in the Chef ecosystem.  FYI, this is what I'm using:
 * Version: 1.6.3
 * Plugins: vagrant-omnibus, vagrant-berkshelf
@@ -255,13 +256,15 @@ Host scratch
 
 ## Amazon Web Services
 
-I expect to use a combination of Vagrant VMs and EC2 instances for integration testing: Vagrant when working in "development mode", but ultimately I want my CI pipeline to extend into EC2.  In addition, if I extend this article to encompass Production deployments, I expect to host that environment in AWS.
+I expect to use a combination of Vagrant VMs and EC2 instances for integration testing: Vagrant when working in "development mode", but ultimately I want my CI pipeline to extend into EC2.  
 
 To this end, I've described a simple network layout in EC2 using CloudFormation.  This conveniently encapsulates and isolates my working environment.  It's also something I can easily plug into a Jenkins job, later on, although initially I've just created it through the AWS CLI tools.
 
+The template file is in ci-demo/cfn_templates.
+
 ## Berkshelf
 
-I use Berkshelf to manage cookbook dependencies.
+I'm using Berkshelf to manage cookbook dependencies.
 Berkshelf should be using knife configuration, nothing modified or added.
 Generally, I create cookbooks with knife and copy a default Berksfile into place:
 
@@ -333,8 +336,6 @@ I have two scenarios I want to support:
 The requirements for these scenarios are different enough that I won't try handle them in a single job.  Rather, I'll define a job for each, triggering the EC2 job via the pipeline, and leaving the local VM job to be run manually, when I need to use it.
 
 How should this job (these jobs, really) interact with Chef?  Test Kitchen can use chef-zero, chef-solo, or chef-client as provisioner.  I've already steered away from chef-solo, but in my CI infrastructure I've set things up for both chef-zero and chef-client.  For this stage of testing, I've decided to use chef-zero: It guarantees the node gets all its code from the CI server, which in turn has gotten it from GitHub.  This is a decision that I probably make differently for later lifecycle environments (i.e. those closer to Production).  But before doing so I will want the uploading of policies into Chef Server also managed by this pipeline.  This aligns well with the idea of inserting a code review step later in the process.
-
-In EC2, I've defined a VPC into which the VMs for this job are created.  This is mostly a matter of housekeeping.  The CloudFormation template I use is in the ci-demo/cfn_templates directory.
 
 ## Situational Awareness
 
