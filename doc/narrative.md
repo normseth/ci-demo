@@ -176,8 +176,7 @@ Then, to launch a local chef-zero, load it with data, and repoint both knife and
 # current directory is chef-repo
 export CHEF_SERVER_IP=192.168.43.1    # knife.rb conditions chef_server_url on this variable
 knife serve --chef-repo-path . --chef-zero-host $CHEF_SERVER_IP --chef-zero-port 8889 --repo-mode everything &
-knife bootstrap master -x vagrant -P vagrant --sudo -N buildmaster -E ci --run-list 'recipe[buildserver]'
-knife bootstrap slave01 -x vagrant -P vagrant --sudo -N buildslave01 -E ci --run-list 'recipe[buildserver::slave-ruby]'
+# update chef_server_url in /etc/chef/client.rb
 ```
 
 I can basically reverse these steps to switch back to the hosted chef server.  Note, however, that if I destroy and recreate a node, I need to bootstrap it to the hosted chef organization first.
