@@ -25,24 +25,18 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
   end
 
-  # Dev environment for Rails apps
-  config.vm.define "rdev" do |rdev|
-    rdev.omnibus.chef_version = :latest
-    rdev.vm.box = "opscode-ubuntu-12.04"
-    rdev.vm.hostname = "rdev"
-    rdev.vm.network :private_network, ip: "192.168.43.4"
-    rdev.vm.synced_folder "../rails_projects", "/rails_projects"
+  config.vm.define "buildslave02" do |b2|
+    b2.omnibus.chef_version = :latest
+    b2.vm.box = "opscode-ubuntu-14.04"
+    b2.vm.hostname = "buildslave02"
+    b2.vm.network :private_network, ip: "192.168.43.7"
+    b2.vm.provider "virtualbox" do |v|
+      v.memory = 4096
+      v.cpus = 2
+    end
   end
 
-  # Test environment for Rails apps
-  config.vm.define "rtest" do |rtest|
-    rtest.omnibus.chef_version = :latest
-    rtest.vm.box = "opscode-ubuntu-12.04"
-    rtest.vm.hostname = "rtest"
-    rtest.vm.network :private_network, ip: "192.168.43.5"
-  end
-
-  # Scratch VM for looking at intercity/rails cookbook
+  # Scratch VM
   config.vm.define "scratch" do |scratch|
     scratch.omnibus.chef_version = :latest
     scratch.vm.box = "opscode-ubuntu-12.04"
