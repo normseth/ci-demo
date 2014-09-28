@@ -186,7 +186,6 @@ ci-demo/                  # repo = ci-demo
   rails_projects/         # not in any repo
     microblog/            # standalone repo
   secrets/                # not in any repo
-    demo_app/             # standalone repo
   vagrant                 # repo = ci-demo
 ```
 
